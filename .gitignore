@@ -5,3 +5,7 @@ venv/
 imgs/
 
 blobs/
+
+jobLists/
+
+node_modules/

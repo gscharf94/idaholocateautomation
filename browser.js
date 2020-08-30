@@ -73,6 +73,65 @@ class DataProcessor {
 		});
 	}
 
+	checkIfJobCompleted(job, completedJobs) {
+		for (let i=0; i<completedJobs.length; i++) {
+			let finishedJob = completedJobs[i];
+			if (
+				job.houseNum === finishedJob.houseNum &&
+				job.street === finishedJob.street &&
+				job.locateInfo === finishedJob.locateInfo	
+			) {
+				console.log('Job already completed');
+				return true;
+			}
+		}
+		return false;
+	}
+
+	trimJobList(jobList, completedJobs) {
+		console.log(`joblist: ${jobList}`);
+		console.log(`completed: ${completedJobs}`);
+		let finalJobList = [];
+		for (const job of jobList) {
+			if (this.checkIfJobCompleted(job, completedJobs)) {
+				
+			} else {
+				finalJobList.push(job);
+			}
+		}
+		console.log(`final job list:\n${finalJobList}`);
+		let webBrowser = new WebBrowser(jobList);
+		
+	}
+	
+	getCompletedJobs(jobList) {
+		fs.readdir('completedJobs', 'utf-8', (err, files) => {
+			if (err) throw err;
+			
+			let completedJobs = [];
+			for (const file of files) {
+				if (file.slice(-4) == '.log') {
+					let objs = this.getFileText(file);
+					objs.forEach( (job) => {
+						completedJobs.push(job);
+					})
+				}
+			}
+			this.trimJobList(jobList, completedJobs);
+		})
+	}
+	
+	getFileText(file) {
+		let text = fs.readFileSync(`completedJobs/${file}`, 'utf8');
+		let completedJobs = text.split("\n").slice(0,-1);
+		// console.log(`getfiletext completed jobs: ${completedJobs}`);
+		let objs = [];
+		completedJobs.forEach( (job) => {
+			objs.push(JSON.parse(job));
+		})
+		return objs;
+	}
+
 	createJobList(text) {
 		const JOBTEXT = {
 			rear: "Locate entire REAR EASEMENT of property",
@@ -94,7 +153,6 @@ class DataProcessor {
 			easementInfo = JSON.parse(easementInfo);
 
 			let job = {
-				completed: false,
 				street: addressInfo.street,
 				houseNum: addressInfo.num,
 			};
@@ -107,7 +165,7 @@ class DataProcessor {
 				}
 			}
 		});
-		let webBrowser = new WebBrowser(jobList);
+		this.getCompletedJobs(jobList);
 	}
 }
 
@@ -120,12 +178,20 @@ class WebBrowser {
 		this.jobList = jobList;
 		this.date = new Date();
 		this.saveLog(`Starting jobList: ${JSON.stringify(jobList)}`);
+		this.saveLog('---------------------------------------------');
 		this.mainFunction();
 	}
 
 	saveLog(text) {
-		let fileName = `jobLists/logM${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.txt` 
+		let fileName = `jobLists/logM${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.txt`
+		this.savedJobs = `completedJobs/M${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.txt`; 
 		fs.appendFile(fileName, text, (err) => {
+			if (err) throw err;
+		});
+	}
+
+	saveJobInfo(job) {
+		fs.appendFile(this.savedJobs, `${JSON.stringify(job)}\n`, (err) => {
 			if (err) throw err;
 		});
 	}
@@ -154,43 +220,77 @@ class WebBrowser {
 		await this.waitForLoad(page);
 		await page.evaluate( () => { SameExcav() });
 
-		await this.waitForLoad();
+		await this.waitForLoad(page);
 		let cityBar = await page.$('input[name="DigCitySearch"]');
 		await cityBar.type(this.city);
-
 		await page.evaluate( () => { Search(0) });
+	}
+
+	async processJob(page, job) {
+		let addressBar = await page.$('input[name="DigAddressFrom"]');
+		await addressBar.type(job.houseNum);
+
+		let streetBar = await page.$('input[name="DigStreetSearch"]');
+		await streetBar.type(job.street);
+
+		await page.evaluate( () => { Search(1) });
+		await this.waitForLoad(page);
+
+		await page.evaluate( () => {
+			let secondStreetSelect = document.querySelector('select[name="DigInter1"]');
+			secondStreetSelect.selectedIndex = 1;
+		});
+
+		let workType = await page.$('select[name="WorkType"]');
+		await workType.select('171');
+
+		let checkBox1 = await page.$('input[name="DigInfo1"]');
+		let checkBox2 = await page.$('input[name="DigInfo4"]');
+		let checkBox3 = await page.$('input[name="DigInfo6"]');
+
+		await checkBox1.click();
+		await checkBox2.click();
+		await checkBox3.click();
+
+		let locateInfoBox = await page.$('textarea[name="AddInfo"]');
+		locateInfoBox.type(job.locateInfo);
+
+		job.confirmationNumber = "code"
+		this.saveLog(JSON.stringify(job));
 	}
 
 	mainFunction() {
 		(async() => {
-			const browser = await puppeteer.launch({ headless:false });
+			const browser = await puppeteer.launch({ headless:false, slowMo: 150 });
 			const page = await browser.newPage();
 			await page.goto('http://ticket.digline.com/eticket/default.asp?a=&c=&JavaEnabled=1');
 			await this.acceptTerms(page);
 			await this.login(page);
-
 			await this.waitForLoad(page);
+			
+			let testJob = {
+				houseNum: "1010",
+				street: "N Dixie Ave",
+				locateInfo: "THIS SHOULD SHOW UP",
+			};
+			
+			let testJob2 = {
+				houseNum: "1010",
+				street: "N Dixie Ave",
+				locateInfo: "THIS SHOULD NOT SHOW UP",	
+			}
+
+			let jobs = [testJob2, testJob]
+
+			jobs.forEach( async(job) => {
+				await this.processJob(page, job);
+			});
 
 			setTimeout(() => {
 				browser.close();
-			}, 5000);
+			}, 10000);
 		})();
 	}
 }
-
-
-// (async() => {
-// 	const browser = await puppeteer.launch({headless:false});
-// 	const page = await browser.newPage();
-// 	await page.goto('https://google.com');
-// 	await page.screenshot({path:'test.png'});
-
-// 	setTimeout( async() => {
-// 		await browser.close();
-// 	}, 2000);
-
-// })();
-
-
 
 dataProcessor = new DataProcessor();

@@ -307,7 +307,7 @@ class WebBrowser {
 			await this.waitForLoad(page);
 
 			for (let i=0; i<this.jobList.length; i++) {
-				console.log(`starting job: ${this.jobList[i]}`);
+				console.log(`starting job: ${this.jobList[i].houseNum} ${this.jobList[i].street}`);
 				console.log('starting process job');
 				await this.processJob(page, this.jobList[i]);
 				console.log(`finished job: ${this.jobList[i]}`);

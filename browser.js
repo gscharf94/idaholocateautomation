@@ -127,7 +127,8 @@ class DataProcessor {
 		// console.log(`getfiletext completed jobs: ${completedJobs}`);
 		let objs = [];
 		completedJobs.forEach( (job) => {
-			objs.push(JSON.parse(job));
+			console.log()
+			objs.push(JSON.parse(job.replaceAll(`'`,"")));
 		})
 		return objs;
 	}
@@ -174,6 +175,7 @@ class WebBrowser {
 		this.contractorID = "4491";
 		this.password = "1546";
 		this.city = "Meridian";
+		this.first = true;
 
 		this.jobList = jobList;
 		this.date = new Date();
@@ -184,14 +186,17 @@ class WebBrowser {
 
 	saveLog(text) {
 		let fileName = `jobLists/logM${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.txt`
-		this.savedJobs = `completedJobs/M${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.txt`; 
+		this.savedJobs = `completedJobs/M${this.date.getMonth()+1}D${this.date.getDay()}H${this.date.getHours()}m${this.date.getMinutes()}.log`; 
 		fs.appendFile(fileName, text, (err) => {
 			if (err) throw err;
 		});
 	}
 
 	saveJobInfo(job) {
-		fs.appendFile(this.savedJobs, `${JSON.stringify(job)}\n`, (err) => {
+		fs.appendFile(this.savedJobs, JSON.stringify(job), (err) => {
+			if (err) throw err;
+		});
+		fs.appendFile(this.savedJobs, "\n", (err) => {
 			if (err) throw err;
 		});
 	}
@@ -203,9 +208,11 @@ class WebBrowser {
 	}
 
 	async waitForLoad(page) {
+		console.log('waiting page loading...')
 		await page.waitForNavigation({
 			waitUntil: 'networkidle0',
 		});
+		console.log('loaded');
 	}
 
 	async login(page) {
@@ -227,10 +234,13 @@ class WebBrowser {
 	}
 
 	async processJob(page, job) {
+		console.log('looking for address bar');
 		let addressBar = await page.$('input[name="DigAddressFrom"]');
+		await addressBar.click({ clickCount: 3 });
 		await addressBar.type(job.houseNum);
 
 		let streetBar = await page.$('input[name="DigStreetSearch"]');
+		await streetBar.click({ clickCount: 3 });
 		await streetBar.type(job.street);
 
 		await page.evaluate( () => { Search(1) });
@@ -240,23 +250,47 @@ class WebBrowser {
 			let secondStreetSelect = document.querySelector('select[name="DigInter1"]');
 			secondStreetSelect.selectedIndex = 1;
 		});
+		
+		if (this.first == true) {
+			let workType = await page.$('select[name="WorkType"]');
+			await workType.select('171');
 
-		let workType = await page.$('select[name="WorkType"]');
-		await workType.select('171');
+			let checkBox1 = await page.$('input[name="DigInfo1"]');
+			let checkBox2 = await page.$('input[name="DigInfo4"]');
+			let checkBox3 = await page.$('input[name="DigInfo6"]');
 
-		let checkBox1 = await page.$('input[name="DigInfo1"]');
-		let checkBox2 = await page.$('input[name="DigInfo4"]');
-		let checkBox3 = await page.$('input[name="DigInfo6"]');
+			await checkBox1.click();
+			await checkBox2.click();
+			await checkBox3.click();
 
-		await checkBox1.click();
-		await checkBox2.click();
-		await checkBox3.click();
+			this.first = false;
+		}
 
 		let locateInfoBox = await page.$('textarea[name="AddInfo"]');
-		locateInfoBox.type(job.locateInfo);
+		await locateInfoBox.click({ clickCount: 3 });
+		await locateInfoBox.type(job.locateInfo);
 
-		job.confirmationNumber = "code"
-		this.saveLog(JSON.stringify(job));
+		let nextSectionButton = await page.$('input[name="Submit"]');
+		await nextSectionButton.click();
+
+		await this.waitForLoad(page);
+		
+		let submitRequestButton = await page.$('input[name="Submit"]');
+		submitRequestButton.click();
+
+		await this.waitForLoad(page);
+
+		const pageHTML = await page.evaluate( () =>	document.body.innerHTML);
+		
+		let startInd = pageHTML.indexOf('<font size="+1">');
+		let newHTML = pageHTML.slice(startInd+16,);
+		let endInd = newHTML.indexOf('</font>');
+		let confNum = newHTML.slice(0,endInd);
+
+		let newRequestButton = await page.$('input[id="button1"]');
+		newRequestButton.click();
+		job.confirmationNumber = confNum;
+		this.saveJobInfo(JSON.stringify(job));
 	}
 
 	mainFunction() {
@@ -267,24 +301,16 @@ class WebBrowser {
 			await this.acceptTerms(page);
 			await this.login(page);
 			await this.waitForLoad(page);
-			
-			let testJob = {
-				houseNum: "1010",
-				street: "N Dixie Ave",
-				locateInfo: "THIS SHOULD SHOW UP",
-			};
-			
-			let testJob2 = {
-				houseNum: "1010",
-				street: "N Dixie Ave",
-				locateInfo: "THIS SHOULD NOT SHOW UP",	
+
+			for (let i=0; i<this.jobList.length; i++) {
+				console.log(`starting job: ${this.jobList[i]}`);
+				console.log('starting process job');
+				await this.processJob(page, this.jobList[i]);
+				console.log(`finished job: ${this.jobList[i]}`);
+				await this.waitForLoad(page);
+				await this.acceptTerms(page);
+				await this.waitForLoad(page);
 			}
-
-			let jobs = [testJob2, testJob]
-
-			jobs.forEach( async(job) => {
-				await this.processJob(page, job);
-			});
 
 			setTimeout(() => {
 				browser.close();

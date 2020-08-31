@@ -18,11 +18,12 @@ class ScreenshotParser():
 		pass
 
 	def get_address_screenshot(self):
-		img = ImageGrab.grab(bbox=ADDRESS_BAR_POSITION)
+		img = ImageGrab.grab(bbox=ADDRESS_BAR_POSITION, backend="mss")
 		img.save(f'{CWD}\\imgs\\tmp.png')
 
 	def parse_image(self):
 		raw_text = pt.image_to_string(Image.open(f'{CWD}\\imgs\\tmp.png'))
+		print(f'raw text: ${raw_text}')
 		first_line = raw_text.split("\n")[0]
 		address_number = first_line.split(" ")[0]
 		street_name = " ".join(first_line.split(" ")[1:])
@@ -120,7 +121,9 @@ class BlobWriter():
 			if options == "init":
 				f.write("BLOB FILE INITIALIZED\n")
 			else:
-				f.write(f'{screen_text} {options}\n')
+				screen_text_text = f'{screen_text}'.replace("'",'"')
+				options_text = f'{options}'.replace("'",'"')
+				f.write(f'{screen_text_text} {options_text}\n')
 
 
 app = UIApp()

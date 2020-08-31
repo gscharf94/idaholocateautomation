@@ -21,6 +21,7 @@ class DataProcessor {
 	}
 
 	getUserOption(options) {
+		console.log(`get user options: ${options}`);
 		const r1 = readline.createInterface({
 			input: process.stdin,
 			output: process.stdout,
@@ -56,6 +57,7 @@ class DataProcessor {
 	}
 
 	printOptionList(items) {
+		console.log(`print options list ${items}`);
 		let options = {};
 		items.forEach( (val, ind) => {
 			options[ind] = val;
@@ -147,10 +149,13 @@ class DataProcessor {
 		let jobList = [];
 
 		split.forEach( (val, ind) => {
+			console.log(`splitting ${val}`);
 			let addressInfo = val.slice(0,val.indexOf('}')+1).replaceAll(`'`,`"`);
+			console.log(`ainfo: >${addressInfo}<`);
 			addressInfo = JSON.parse(addressInfo);
 
 			let easementInfo = val.slice(val.indexOf('}')+2,).replaceAll(`'`,`"`);
+			console.log(` einfo: >${easementInfo}<`);
 			easementInfo = JSON.parse(easementInfo);
 
 			let job = {
@@ -158,13 +163,15 @@ class DataProcessor {
 				houseNum: addressInfo.num,
 			};
 
+			let newJob = { ...job };
+			let locateEasement = "";
 			for (const option in easementInfo) {
 				if (easementInfo[option] === 1) {
-					let newJob = { ...job };
-					newJob['locateInfo'] = JOBTEXT[option];
-					jobList.push(newJob);
+					locateEasement += `${JOBTEXT[option]} & `;
 				}
 			}
+			newJob['locateInfo'] = locateEasement.slice(0,-2);
+			jobList.push(newJob);
 		});
 		this.getCompletedJobs(jobList);
 	}
@@ -193,10 +200,7 @@ class WebBrowser {
 	}
 
 	saveJobInfo(job) {
-		fs.appendFile(this.savedJobs, JSON.stringify(job), (err) => {
-			if (err) throw err;
-		});
-		fs.appendFile(this.savedJobs, "\n", (err) => {
+		fs.appendFile(this.savedJobs, JSON.stringify(job)+"\n", (err) => {
 			if (err) throw err;
 		});
 	}

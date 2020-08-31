@@ -22,7 +22,7 @@ class ScreenshotParser():
 		img.save(f'{CWD}\\imgs\\tmp.png')
 
 	def parse_image(self):
-		raw_text = pt.image_to_string(Image.open(f'{CWD}\\imgs\\tmp.png'))
+		raw_text = pt.image_to_string(Image.open(f'{CWD}\\imgs\\tmp.png')).strip()
 		print(f'raw text: ${raw_text}')
 		first_line = raw_text.split("\n")[0]
 		address_number = first_line.split(" ")[0]
